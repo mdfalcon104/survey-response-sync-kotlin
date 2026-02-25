@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Minimal manifest for library/data-layer module -->
+    <!-- No activities or UI components - this is a sync engine library -->
+</manifest>
