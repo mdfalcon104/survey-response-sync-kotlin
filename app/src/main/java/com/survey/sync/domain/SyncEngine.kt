@@ -7,6 +7,7 @@ import com.survey.sync.core.SyncStatus
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -75,6 +76,10 @@ class SyncEngine(
 
         for (response in pendingResponses) {
             remainingIds.remove(response.id)
+
+            if (response.retryCount > 0) {
+                delay(calculateBackoffDelay(response.retryCount))
+            }
 
             val uploadResult = api.upload(response)
             val currentTime = timeProvider.currentTimeMillis()

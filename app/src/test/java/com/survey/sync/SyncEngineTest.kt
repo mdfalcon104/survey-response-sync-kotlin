@@ -9,6 +9,7 @@ import com.survey.sync.domain.SyncEngine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -390,6 +391,50 @@ class SyncEngineTest {
 
         assertThat(result.succeededIds).isEmpty()
         assertThat(api.getCallCount()).isEqualTo(0)
+    }
+
+    @Test
+    fun `backoff delay is applied before retrying failed responses`() = runTest {
+        val response = TestHelpers.createSurveyResponse(id = "test-1")
+        repository.save(response)
+
+        api.setBehavior(FakeSurveyApi.ApiBehavior.ServerError500)
+
+        val config = SyncConfig(
+            initialBackoffMs = 1000,
+            maxRetryCount = 10,
+            consecutiveFailureThreshold = 10
+        )
+        val engine = SyncEngine(repository, api, storageManager, timeProvider, config)
+
+        // First sync: retryCount = 0, no backoff delay
+        engine.sync()
+        val timeAfterFirstSync = currentTime
+        assertThat(timeAfterFirstSync).isEqualTo(0) // no delay for first attempt
+
+        // Second sync: retryCount = 1, should delay 2000ms (1000 * 2^1)
+        engine.sync()
+        val timeAfterSecondSync = currentTime
+        assertThat(timeAfterSecondSync).isEqualTo(2000)
+
+        // Third sync: retryCount = 2, should delay 4000ms (1000 * 2^2)
+        engine.sync()
+        val timeAfterThirdSync = currentTime
+        assertThat(timeAfterThirdSync).isEqualTo(6000) // 2000 + 4000
+    }
+
+    @Test
+    fun `no backoff delay for first attempt of new responses`() = runTest {
+        val responses = TestHelpers.createSurveyResponses(3)
+        responses.forEach { repository.save(it) }
+
+        api.setBehavior(FakeSurveyApi.ApiBehavior.AlwaysSuccess)
+
+        syncEngine.sync()
+
+        // All responses have retryCount = 0, so no backoff delay applied
+        assertThat(currentTime).isEqualTo(0)
+        assertThat(api.getCallCount()).isEqualTo(3)
     }
 
     @Test
